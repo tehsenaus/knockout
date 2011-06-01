@@ -1,6 +1,14 @@
 ko.dependentObservable = function (evaluatorFunctionOrOptions, evaluatorFunctionTarget, options) {
     var _latestValue, _hasBeenEvaluated = false;
     
+    function accessor() {
+        if (arguments.length) {
+            _latestValue = arguments[0];
+        } else {
+            return _latestValue;
+        }
+    }
+    
     if (evaluatorFunctionOrOptions && typeof evaluatorFunctionOrOptions == "object") {
         // Single-parameter syntax - everything is on this "options" param
         options = evaluatorFunctionOrOptions;
@@ -46,6 +54,7 @@ ko.dependentObservable = function (evaluatorFunctionOrOptions, evaluatorFunction
     };
     
     function evaluate() {
+        var namedArgs;
         // Don't dispose on first evaluation, because the "disposeWhen" callback might
         // e.g., dispose when the associated DOM element isn't in the doc, and it's not
         // going to be in the doc until *after* the first evaluation
@@ -64,26 +73,25 @@ ko.dependentObservable = function (evaluatorFunctionOrOptions, evaluatorFunction
             replaceSubscriptionsToDependencies(distinctDependencies);
         }
 
-        dependentObservable.notifySubscribers(_latestValue);
+        namedArgs = { observable: dependentObservable, accessor: accessor };
+        ko.observableManager.reevaluationBroadcast(namedArgs);
         _hasBeenEvaluated = true;
     }
+    ko.uid.dub(evaluate);
+    evaluate.parentDependentObservable = dependentObservable;
 
     function dependentObservable() {
-        if (arguments.length > 0) {
-            if (typeof options["write"] === "function") {
-                // Writing a value
-                var valueToWrite = arguments[0];
-                options["owner"] ? options["write"].call(options["owner"], valueToWrite) : options["write"](valueToWrite);
-            } else {
-                throw "Cannot write a value to a dependentObservable unless you specify a 'write' option. If you wish to read the current value, don't pass any parameters.";
-            }
-        } else {
-            // Reading the value
-            if (!_hasBeenEvaluated)
-                evaluate();
-            ko.dependencyDetection.registerDependency(dependentObservable);
-            return _latestValue;
+        var namedArgs = {
+            dependentObservable: dependentObservable,
+            evaluate: evaluate,
+            _hasBeenEvaluated: _hasBeenEvaluated,
+            options: options,
+            accessor: accessor
+        };
+        if (arguments.length) {
+            namedArgs.valueToWrite = arguments[0];
         }
+        return ko.observableManager.dependentNodeAccessor(namedArgs);
     }
     dependentObservable.__ko_proto__ = ko.dependentObservable;
     dependentObservable.getDependenciesCount = function () { return _subscriptionsToDependencies.length; }

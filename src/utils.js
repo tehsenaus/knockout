@@ -92,6 +92,27 @@ ko.utils = new (function () {
             }
         },
 
+        extend: function (targetObj/*, sourceObjects...*/) {
+            ko.utils.arrayForEach(Array.prototype.slice.call(arguments, 1), function (sourceObj) {
+                var key;
+                for (key in sourceObj) {
+                    if (Object.prototype.hasOwnProperty.call(sourceObj, key)) {
+                        targetObj[key] = sourceObj[key];
+                    }
+                }
+            });
+            return targetObj;
+        },
+
+        objectForEach: function (object, fn) {
+            var key;
+            for (key in object) {
+                if (Object.prototype.hasOwnProperty.call(object, key)) {
+                    fn(key, object[key]);
+                }
+            }
+        },
+
         setDomNodeChildren: function (domNode, childNodes) {
             ko.utils.emptyDomNode(domNode);
             if (childNodes) {

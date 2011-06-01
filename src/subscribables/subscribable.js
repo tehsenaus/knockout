@@ -12,6 +12,10 @@ ko.subscription = function (callback, disposeCallback) {
 ko.subscribable = function () {
     var _subscriptions = [];
 
+    this.getSubscriptions = function () {
+        return _subscriptions.slice(0);
+    };
+
     this.subscribe = function (callback, callbackTarget) {
         var boundCallback = callbackTarget ? callback.bind(callbackTarget) : callback;
 
@@ -37,6 +41,7 @@ ko.subscribable = function () {
     
     ko.exportProperty(this, 'subscribe', this.subscribe);
     ko.exportProperty(this, 'notifySubscribers', this.notifySubscribers);
+    ko.exportProperty(this, 'getSubscriptions', this.getSubscriptions);
     ko.exportProperty(this, 'getSubscriptionsCount', this.getSubscriptionsCount);
 }
 

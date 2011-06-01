@@ -7,27 +7,35 @@ function valuesArePrimitiveAndEqual(a, b) {
 
 ko.observable = function (initialValue) {
     var _latestValue = initialValue;
-
-    function observable() {
-        if (arguments.length > 0) {
-            // Write            
-            
-            // Ignore writes if the value hasn't changed
-            if ((!observable['equalityComparer']) || !observable['equalityComparer'](_latestValue, arguments[0])) {
-                _latestValue = arguments[0];
-                observable.notifySubscribers(_latestValue);        		
-            }
-            return this; // Permits chained assignments
-        }
-        else {
-            // Read
-            ko.dependencyDetection.registerDependency(observable); // The caller only needs to be notified of changes if they did a "read" operation
+    
+    function accessor() {
+        if (arguments.length) {
+            _latestValue = arguments[0];
+        } else {
             return _latestValue;
         }
     }
+    
+    function observable() {
+        var namedArgs = { observable: observable, accessor: accessor, allowWrite: allowWrite };
+        if (arguments.length) {
+            namedArgs.newValue = arguments[0];
+        }
+        return ko.observableManager.independentNodeAccessor.call(this, namedArgs);
+    }
+    ko.uid.dub(observable);
     observable.__ko_proto__ = ko.observable;
-    observable.valueHasMutated = function () { observable.notifySubscribers(_latestValue); }
+    observable.valueHasMutated = function () {
+        var namedArgs = { observable: observable, accessor: accessor };
+        ko.observableManager.compositeMutationBroadcast(namedArgs);
+    };
     observable['equalityComparer'] = valuesArePrimitiveAndEqual;
+    
+    function allowWrite(args) {
+        // Ignore writes if the value hasn't changed
+        var equalityComparer = args.observable['equalityComparer'];
+        return !equalityComparer || !equalityComparer(args.accessor(), args.newValue);
+    }
     
     ko.subscribable.call(observable);
     
