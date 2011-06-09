@@ -144,20 +144,21 @@ ko.newAtomicObservableManager = function () {
     }
 
     function publishPhaseDependentNodeAccessor(args) {
-        var callbackUid = ko.uid.of(args.evaluate);
+        var callbackUid = ko.uid.of(args.evaluate), delegateArgs;
         if (Object.prototype.hasOwnProperty.call(args, "valueToWrite") ||
                 !Object.prototype.hasOwnProperty.call(downstream, callbackUid) ||
                 Object.prototype.hasOwnProperty.call(evaluated, callbackUid)) {
             // 1.  Writes to dependent nodes execute normally (because they have no direct effect)
             // 2.  Reads of dependent nodes which are not downstream execute normally
             // 3.  Reads of already-evaluated downstream dependent nodes execute normally
-            return ko.abstractObservableManager.dependentNodeAccessor(args);
+            delegateArgs = args;
         } else {
             // 4.  Reads of downstream dependent nodes trigger evaluation the first time
             evaluated[callbackUid] = null;
-            args.evaluate();
-            return args.accessor();
+            delegateArgs = ko.utils.extend({}, args);
+            delegateArgs._hasBeenEvaluated = false;
         }
+        return ko.abstractObservableManager.dependentNodeAccessor(delegateArgs);
     }
 
     function publishPhaseCompositeMutationBroadcast(args) {

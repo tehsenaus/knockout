@@ -169,6 +169,55 @@ describe("Atomic Updates", {
         value_of(evaluationCount.c).should_be(1);
     },
 
+    "Should not interfere with dependency detection": function () {
+        // The following unit test is a specific scenario where failure was observed.
+        // Specifically, c2 had lost its subscription to b2 during the publication
+        // phase of an atomic update.  Dependency detection was being bypassed.
+        // (http://jsfiddle.net/QFjHb/5/)
+        // (https://github.com/beickhoff/beickhoff.github.com/issues/1)
+        var a, b1, b2, c1, c2, d, e, evaluationCount;
+
+        a = ko.observable(0);
+        b1 = ko.dependentObservable(function () {
+            evaluationCount++;
+            return a();
+        });
+        b2 = ko.dependentObservable(function () {
+            evaluationCount++;
+            return a();
+        });
+        c1 = ko.dependentObservable(function () {
+            evaluationCount++;
+            return b1();
+        });
+        c2 = ko.dependentObservable(function () {
+            evaluationCount++;
+            return b2();
+        });
+        d = ko.dependentObservable(function () {
+            evaluationCount++;
+            return c1() + c2();
+        });
+        e = ko.dependentObservable(function () {
+            evaluationCount++;
+            return a() + d();
+        });
+
+        evaluationCount = 0;
+        ko.atomically(function () {
+            a(2);
+        });
+        value_of(e()).should_be(6);
+        value_of(evaluationCount).should_be(6);
+
+        evaluationCount = 0;
+        ko.atomically(function () {
+            a(3);
+        });
+        value_of(e()).should_be(9);
+        value_of(evaluationCount).should_be(6);
+    },
+
     "Should work with observableArrays": function () {
         var a, b, c, evaluationCount;
         a = ko.observableArray([]);
