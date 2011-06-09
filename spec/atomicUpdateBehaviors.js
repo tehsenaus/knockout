@@ -377,6 +377,12 @@ describe("Atomic Updates", {
         value_of(evaluationCount.A).should_be(1);
         value_of(evaluationCount.B).should_be(1);
         value_of(evaluationCount.C).should_be(2);
+    },
+    
+    "Should not throw an exception if a dependentObservable is constructed during the mutation phase": function () {
+      ko.atomically(function () {
+        ko.dependentObservable(function () {});
+      });
     }
 
 });

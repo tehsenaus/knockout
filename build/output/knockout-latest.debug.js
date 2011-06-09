@@ -827,7 +827,7 @@ ko.newAtomicObservableManager = function () {
         statefulApi.dependentNodeAccessor = ko.abstractObservableManager.dependentNodeAccessor;
         statefulApi.compositeMutationBroadcast = writePhaseCompositeMutationBroadcast;
         statefulApi.rebindingBroadcast = null; // does not occur
-        statefulApi.reevaluationBroadcast = null; // does not occur
+        statefulApi.reevaluationBroadcast = nullFn;
     }
 
     function writePhaseIndependentNodeAccessor(args) {
