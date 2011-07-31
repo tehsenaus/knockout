@@ -251,13 +251,15 @@ ko.newAtomicObservableManager = function () {
 ko.observableManager = ko.defaultObservableManager;
 
 ko.atomically = function (fn) {
-    ko.observableManager = ko.newAtomicObservableManager();
+    var mgr = ko.newAtomicObservableManager();
+    mgr.previous = ko.observableManager;
+    ko.observableManager = mgr;
     try {
         do {
             fn();
             fn = ko.observableManager.commit();
         } while (fn);
     } finally {
-        ko.observableManager = ko.defaultObservableManager;
+        ko.observableManager = ko.observableManager.previous;
     }
 };
