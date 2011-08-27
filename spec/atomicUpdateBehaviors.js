@@ -383,6 +383,55 @@ describe("Atomic Updates", {
       ko.atomically(function () {
         ko.dependentObservable(function () {});
       });
+    },
+
+    "Should allow reentrant invocations of atomically()": function () {
+        var a, b, A, B, evaluationCount = {}, values = [];
+        a = ko.observable();
+        A = ko.dependentObservable(function () {
+            evaluationCount.A++;
+            values.push(a())
+        });
+        b = ko.observable();
+        B = ko.dependentObservable(function () {
+            evaluationCount.B++;
+            return b();
+        });
+
+        a(3);
+        b(11);
+        values = [];
+        evaluationCount = { A: 0, B: 0 };
+        ko.atomically(function () {
+            a(2);
+            ko.atomically(function () {
+                a(1);
+                b(10);
+            });
+            a(0);
+        });
+        value_of(a()).should_be(0);
+        value_of(evaluationCount.A).should_be(1);
+        value_of(values).should_be([ 0 ]);
+        value_of(b()).should_be(10);
+        value_of(evaluationCount.B).should_be(1);
+
+        // Control test
+        a(3);
+        b(11);
+        values = [];
+        evaluationCount = { A: 0, B: 0 };
+        ko.atomically(function () {
+            a(2);
+            a(1);
+            b(10);
+            a(0);
+        });
+        value_of(a()).should_be(0);
+        value_of(evaluationCount.A).should_be(1);
+        value_of(values).should_be([ 0 ]);
+        value_of(b()).should_be(10);
+        value_of(evaluationCount.B).should_be(1);
     }
 
 });

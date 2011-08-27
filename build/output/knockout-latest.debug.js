@@ -983,17 +983,29 @@ ko.newAtomicObservableManager = function () {
 
 ko.observableManager = ko.defaultObservableManager;
 
-ko.atomically = function (fn) {
-    ko.observableManager = ko.newAtomicObservableManager();
-    try {
-        do {
+ko.atomically = (function () {
+    // We do not allow nested transactions because we cannot scope the
+    // publications of an inner transaction.  Instead, reentrant invocations of
+    // atomically() are coalesced.
+    var withinTransaction = false;
+    return function (fn) {
+        if (withinTransaction) {
             fn();
-            fn = ko.observableManager.commit();
-        } while (fn);
-    } finally {
-        ko.observableManager = ko.defaultObservableManager;
-    }
-};
+            return;
+        }
+        ko.observableManager = ko.newAtomicObservableManager();
+        withinTransaction = true;
+        try {
+            do {
+                fn();
+                fn = ko.observableManager.commit();
+            } while (fn);
+        } finally {
+            withinTransaction = false;
+            ko.observableManager = ko.defaultObservableManager;
+        }
+    };
+}());
 
 ko.exportSymbol('ko.atomically', ko.atomically);
 var primitiveTypes = { 'undefined':true, 'boolean':true, 'number':true, 'string':true };
