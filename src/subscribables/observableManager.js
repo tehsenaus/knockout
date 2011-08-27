@@ -261,3 +261,5 @@ ko.atomically = function (fn) {
         ko.observableManager = ko.defaultObservableManager;
     }
 };
+
+ko.exportSymbol('ko.atomically', ko.atomically);

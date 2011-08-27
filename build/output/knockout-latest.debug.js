@@ -994,6 +994,8 @@ ko.atomically = function (fn) {
         ko.observableManager = ko.defaultObservableManager;
     }
 };
+
+ko.exportSymbol('ko.atomically', ko.atomically);
 var primitiveTypes = { 'undefined':true, 'boolean':true, 'number':true, 'string':true };
 
 function valuesArePrimitiveAndEqual(a, b) {
