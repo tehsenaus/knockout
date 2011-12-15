@@ -135,10 +135,8 @@ ko.newAtomicObservableManager = function () {
 
     function publishPhaseIndependentNodeAccessor(args) {
         var delegateArgs = ko.utils.extend({}, args);
-        delegateArgs.allowWrite = function () {
-            // Writes to independent nodes are intercepted
+        delegateArgs.afterWrite = function (args) {
             publishPhaseRebindings.push(args);
-            return false;
         };
         return ko.abstractObservableManager.independentNodeAccessor.call(this, delegateArgs);
     }
@@ -146,8 +144,8 @@ ko.newAtomicObservableManager = function () {
     function publishPhaseDependentNodeAccessor(args) {
         var callbackUid = ko.uid.of(args.evaluate), delegateArgs;
         if (Object.prototype.hasOwnProperty.call(args, "valueToWrite") ||
-                !Object.prototype.hasOwnProperty.call(downstream, callbackUid) ||
-                Object.prototype.hasOwnProperty.call(evaluated, callbackUid)) {
+            !Object.prototype.hasOwnProperty.call(downstream, callbackUid) ||
+            Object.prototype.hasOwnProperty.call(evaluated, callbackUid)) {
             // 1.  Writes to dependent nodes execute normally (because they have no direct effect)
             // 2.  Reads of dependent nodes which are not downstream execute normally
             // 3.  Reads of already-evaluated downstream dependent nodes execute normally
@@ -174,7 +172,7 @@ ko.newAtomicObservableManager = function () {
             var subscribable = args.observable, accessor = args.accessor;
             ko.utils.arrayForEach(subscribable.getSubscriptions(), function (subscription) {
                 var callback = subscription.callback,
-                    callbackUid = ko.uid.of(callback);
+                callbackUid = ko.uid.of(callback);
                 if (callbackUid == null) {
                     autonomousListeners.push({
                         callback: callback,
@@ -231,7 +229,7 @@ ko.newAtomicObservableManager = function () {
 
             return function () {
                 ko.utils.arrayForEach(publishPhaseRebindings, function (args) {
-                    ko.observableManager.independentNodeAccessor(args);
+                    ko.abstractObservableManager.rebindingBroadcast(args);
                 });
                 ko.utils.arrayForEach(publishPhaseCompositeMutationBroadcasts, function (o) {
                     ko.observableManager.compositeMutationBroadcast(o);
