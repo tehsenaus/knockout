@@ -1,4 +1,14 @@
 
+if(!window.hasOwnProperty('Profiler')) {
+	window.Profiler = {
+		profiled: function (fn) { return fn; },
+		manager: {
+			enter: function () {},
+			exit: function () {}
+		}
+	}
+}
+
 ko.utils = new (function () {
     var stringTrimRegex = /^(\s|\u00A0)+|(\s|\u00A0)+$/g;
     var isIe6 = /MSIE 6/i.test(navigator.userAgent);

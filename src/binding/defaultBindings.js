@@ -306,11 +306,11 @@ function doDomRender() {
     }
     domUpdateQueue.length = 0;
 }
-$(function domRender() {
+function domRender() {
     requestAnimFrame(domRender);
     doDomRender();
-});
-$(function domRenderFlushQueue() {
+};
+function domRenderFlushQueue() {
     // Some browsers don't send any anim frames at all when the tab
     // isn't visible, so we need to flush the update queue periodically.
     setInterval(function () {
@@ -318,8 +318,16 @@ $(function domRenderFlushQueue() {
             doDomRender();
         }
     }, 5000);
-});
+};
+function domOnLoad() {
+	domRender(); domRenderFlushQueue();
+};
+if(window.addEventListener)
+	window.addEventListener('load', domOnLoad, false);
+else
+	window.attachEvent('onload', domOnLoad);
 
+	
 ko.bindingHandlers['text'] = {
     'update': function (element, valueAccessor) {
         var value = ko.utils.unwrapObservable(valueAccessor());
