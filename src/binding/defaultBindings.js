@@ -279,13 +279,58 @@ ko.bindingHandlers['selectedOptions'] = {
     }
 };
 
+
+
+// shim layer with setTimeout fallback
+window.requestAnimFrame = (function () {
+    return window.requestAnimationFrame ||
+              window.webkitRequestAnimationFrame ||
+              window.mozRequestAnimationFrame ||
+              window.oRequestAnimationFrame ||
+              window.msRequestAnimationFrame ||
+              function (/* function */callback, /* DOMElement */element) {
+                  window.setTimeout(callback, 1000 / 60);
+              };
+})();
+
+
+// Added by Sean
+// Buffer DOM updates together with requestAnimationFrame
+// Developer's Note: OMG this is so fast!!!
+
+var domUpdateQueue = ko.domUpdateQueue = [];
+function doDomRender() {
+    var i;
+    for (i = 0; i < domUpdateQueue.length; i++) {
+        domUpdateQueue[i]();
+    }
+    domUpdateQueue.length = 0;
+}
+$(function domRender() {
+    requestAnimFrame(domRender);
+    doDomRender();
+});
+$(function domRenderFlushQueue() {
+    // Some browsers don't send any anim frames at all when the tab
+    // isn't visible, so we need to flush the update queue periodically.
+    setInterval(function () {
+        if (domUpdateQueue.length > 1000) {
+            doDomRender();
+        }
+    }, 5000);
+});
+
 ko.bindingHandlers['text'] = {
     'update': function (element, valueAccessor) {
         var value = ko.utils.unwrapObservable(valueAccessor());
         if ((value === null) || (value === undefined))
             value = "";
-        typeof element.innerText == "string" ? element.innerText = value
-                                             : element.textContent = value;
+        if (!(typeof value === "string"))
+            value = value.toString();
+        domUpdateQueue.push(function () {
+            typeof element.innerText == "string" ? element.innerText = value
+                                                 : element.textContent = value;
+        });
     }
 };
 
