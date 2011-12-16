@@ -4,7 +4,7 @@
 
 // Custom Trade Chase Build, With Atomic Updates
 // Performance Improvements by Sean M
-// https://github.com/tehsenaus/knockout
+// https://github.com/tehsenaus/knockout/tree/perf
 (function(window,undefined){ 
 function c(a){throw a;}var l=void 0,n=!0,q=null,r=!1,s=window.ko={};s.b=function(a,d){for(var b=a.split("."),e=window,f=0;f<b.length-1;f++)e=e[b[f]];e[b[b.length-1]]=d};s.l=function(a,d,b){a[d]=b};if(!window.hasOwnProperty("Profiler"))window.Ab={z:function(a){return a},Ib:{Eb:function(){},Gb:function(){}}};
 s.a=new function(){function a(a,b){if("INPUT"!=a.tagName||!a.type)return r;if("click"!=b.toLowerCase())return r;var e=a.type.toLowerCase();return"checkbox"==e||"radio"==e}var d=/^(\s|\u00A0)+|(\s|\u00A0)+$/g,b=/MSIE 6/i.test(navigator.userAgent),e=/MSIE 7/i.test(navigator.userAgent),f={},g={};f[/Firefox\/2/i.test(navigator.userAgent)?"KeyboardEvent":"UIEvents"]=["keyup","keydown","keypress"];f.MouseEvents="click,dblclick,mousedown,mouseup,mousemove,mouseover,mouseout,mouseenter,mouseleave".split(",");

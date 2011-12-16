@@ -4,4 +4,4 @@
 
 // Custom Trade Chase Build, With Atomic Updates
 // Performance Improvements by Sean M
-// https://github.com/tehsenaus/knockout
+// https://github.com/tehsenaus/knockout/tree/perf

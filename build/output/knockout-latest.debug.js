@@ -4,7 +4,7 @@
 
 // Custom Trade Chase Build, With Atomic Updates
 // Performance Improvements by Sean M
-// https://github.com/tehsenaus/knockout
+// https://github.com/tehsenaus/knockout/tree/perf
 (function(window,undefined){ 
 var ko = window["ko"] = {};
 // Google Closure Compiler helpers (used only to make the minified file smaller)
