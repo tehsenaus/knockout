@@ -2,7 +2,7 @@
 // (c) Steven Sanderson - http://knockoutjs.com/
 // License: MIT (http://www.opensource.org/licenses/mit-license.php)
 
-(function(window,undefined){
+(function(window,undefined){ 
 var ko = window["ko"] = {};
 // Google Closure Compiler helpers (used only to make the minified file smaller)
 ko.exportSymbol = function(publicPath, object) {
@@ -806,46 +806,36 @@ ko.defaultObservableManager = {
 
 ko.newAtomicObservableManager = function () {
     var statefulApi,
-        nullFn = function () {},
-        // Collections for the write and commit phases
+        nullFn = function () { },
+    // Collections for the write and commit phases
         cache,
         writePhaseCompositeMutationBroadcasts,
-        // Collections for the commit and publish phases
+    // Collections for the commit and publish phases
         downstream,
-        // Collections for the publish phase
+        autonomousListeners,
+    // Collections for the publish phase
         evaluated,
-        // Collections for the publish and (next) write phases
+    // Collections for the publish and (next) write phases
         publishPhaseRebindings,
         publishPhaseCompositeMutationBroadcasts;
 
     function setUpWritePhase() {
         cache = {};
         writePhaseCompositeMutationBroadcasts = [];
-        downstream = null;
         evaluated = null;
         statefulApi.independentNodeAccessor = writePhaseIndependentNodeAccessor;
         statefulApi.dependentNodeAccessor = ko.abstractObservableManager.dependentNodeAccessor;
         statefulApi.compositeMutationBroadcast = writePhaseCompositeMutationBroadcast;
         statefulApi.rebindingBroadcast = null; // does not occur
         statefulApi.reevaluationBroadcast = nullFn;
+
+        autonomousListeners = [];
+        downstream = {};
     }
 
     function writePhaseIndependentNodeAccessor(args) {
         var delegateArgs = ko.utils.extend({}, args);
-        delegateArgs.accessor = function cachingAccessor() {
-            var observableUid = ko.uid.of(args.observable), isCached, cachedArgs;
-            if (arguments.length) {
-                // Write
-                cachedArgs = ko.utils.extend({}, args);
-                cachedArgs.newValue = arguments[0];
-                cache[observableUid] = cachedArgs;
-            } else {
-                // Read
-                isCached = Object.prototype.hasOwnProperty.call(cache, observableUid);
-                return isCached ? cache[observableUid].newValue : args.accessor();
-            }
-        };
-        delegateArgs.afterWrite = nullFn;
+        delegateArgs.afterWrite = interceptPublication;
         return ko.abstractObservableManager.independentNodeAccessor.call(this, delegateArgs);
     }
 
@@ -868,10 +858,8 @@ ko.newAtomicObservableManager = function () {
 
     function publishPhaseIndependentNodeAccessor(args) {
         var delegateArgs = ko.utils.extend({}, args);
-        delegateArgs.allowWrite = function () {
-            // Writes to independent nodes are intercepted
+        delegateArgs.afterWrite = function (args) {
             publishPhaseRebindings.push(args);
-            return false;
         };
         return ko.abstractObservableManager.independentNodeAccessor.call(this, delegateArgs);
     }
@@ -898,12 +886,8 @@ ko.newAtomicObservableManager = function () {
         publishPhaseCompositeMutationBroadcasts.push(args);
     }
 
-    function commit() {
-        var autonomousListeners = [];
-
-        downstream = {};
-
-        function interceptPublication(args) {
+    function interceptPublication(args) {
+        try {
             var subscribable = args.observable, accessor = args.accessor;
             ko.utils.arrayForEach(subscribable.getSubscriptions(), function (subscription) {
                 var callback = subscription.callback,
@@ -928,49 +912,53 @@ ko.newAtomicObservableManager = function () {
                     });
                 }
             });
-        }
+        } catch (ex) { console.error(ex, ex.stack); }
+    }
 
-        // Commit the new values while intercepting publication
-        ko.utils.objectForEach(cache, function (observableUid, o) {
-            var delegateArgs = ko.utils.extend({}, o);
-            delegateArgs.afterWrite = interceptPublication;
-            return ko.abstractObservableManager.independentNodeAccessor.call(this, delegateArgs);
-        });
+    function commit() {
+        do {
+            // Commit the new values while intercepting publication
+            ko.utils.objectForEach(cache, function (observableUid, o) {
+                var delegateArgs = ko.utils.extend({}, o);
+                delegateArgs.afterWrite = interceptPublication;
+                return ko.abstractObservableManager.independentNodeAccessor.call(this, delegateArgs);
+            });
 
-        // Transform the intercepted broadcasts into additional intercepted publications
-        ko.utils.arrayForEach(writePhaseCompositeMutationBroadcasts, function (o) {
-            interceptPublication(o);
-        });
+            // Transform the intercepted broadcasts into additional intercepted publications
+            ko.utils.arrayForEach(writePhaseCompositeMutationBroadcasts, function (o) {
+                interceptPublication(o);
+            });
 
-        setUpPublishPhase();
+            setUpPublishPhase();
 
-        // Trigger evaluation of all downstream dependent nodes
-        ko.utils.objectForEach(downstream, function (callbackUid, o) {
-            if (!Object.prototype.hasOwnProperty.call(evaluated, callbackUid)) {
-                evaluated[callbackUid] = null;
-                o.evaluate();
-            }
-        });
+            // Trigger evaluation of all downstream dependent nodes
+            ko.utils.objectForEach(downstream, function (callbackUid, o) {
+                if (!Object.prototype.hasOwnProperty.call(evaluated, callbackUid)) {
+                    evaluated[callbackUid] = null;
+                    o.evaluate();
+                }
+            });
 
-        // Notify all autonomous listeners
-        ko.utils.arrayForEach(autonomousListeners, function (o) {
-            o.callback(o.accessor());
-        });
+            // Notify all autonomous listeners
+            ko.utils.arrayForEach(autonomousListeners, function (o) {
+                o.callback(o.accessor());
+            });
 
-        // If any additional mutation of independent nodes was intercepted during the commit
-        // we must repeat the whole process.
-        if (publishPhaseRebindings.length || publishPhaseCompositeMutationBroadcasts.length) {
-            setUpWritePhase();
+            // If any additional mutation of independent nodes was intercepted during the commit
+            // we must repeat the whole process.
+            if (publishPhaseRebindings.length || publishPhaseCompositeMutationBroadcasts.length) {
+                setUpWritePhase();
 
-            return function () {
                 ko.utils.arrayForEach(publishPhaseRebindings, function (args) {
-                    ko.observableManager.independentNodeAccessor(args);
+                    interceptPublication(args);
                 });
                 ko.utils.arrayForEach(publishPhaseCompositeMutationBroadcasts, function (o) {
                     ko.observableManager.compositeMutationBroadcast(o);
                 });
-            };
-        }
+            } else {
+                break;
+            }
+        } while(true);
     }
 
     statefulApi = {
@@ -993,19 +981,17 @@ ko.atomically = (function () {
             fn();
             return;
         }
-        ko.observableManager = ko.newAtomicObservableManager();
+        var atomicObservableManager = ko.observableManager = ko.newAtomicObservableManager();
         withinTransaction = true;
         try {
-            do {
-                fn();
-                fn = ko.observableManager.commit();
-            } while (fn);
+            fn();
+            atomicObservableManager.commit();
         } finally {
             withinTransaction = false;
             ko.observableManager = ko.defaultObservableManager;
         }
     };
-}());
+} ());
 
 ko.exportSymbol('ko.atomically', ko.atomically);
 var primitiveTypes = { 'undefined':true, 'boolean':true, 'number':true, 'string':true };
@@ -2537,4 +2523,4 @@ ko.jqueryTmplTemplateEngine.prototype = new ko.templateEngine();
 // Use this one by default
 ko.setTemplateEngine(new ko.jqueryTmplTemplateEngine());
 
-ko.exportSymbol('ko.jqueryTmplTemplateEngine', ko.jqueryTmplTemplateEngine);})(window);
+ko.exportSymbol('ko.jqueryTmplTemplateEngine', ko.jqueryTmplTemplateEngine);})(window);                  
