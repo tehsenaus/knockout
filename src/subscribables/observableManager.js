@@ -75,10 +75,11 @@ ko.newAtomicObservableManager = function () {
     var statefulApi,
         nullFn = function () { },
     // Collections for the write and commit phases
-        cache,
+		independentNodeInitialValues,
+		writePhasePublications,
         writePhaseCompositeMutationBroadcasts,
     // Collections for the commit and publish phases
-        downstream,
+        downstream, downstreamEvaluationQueue,
         autonomousListeners,
     // Collections for the publish phase
         evaluated,
@@ -87,7 +88,6 @@ ko.newAtomicObservableManager = function () {
         publishPhaseCompositeMutationBroadcasts;
 
     function setUpWritePhase() {
-        cache = {};
         writePhaseCompositeMutationBroadcasts = [];
         evaluated = null;
         statefulApi.independentNodeAccessor = writePhaseIndependentNodeAccessor;
@@ -95,14 +95,20 @@ ko.newAtomicObservableManager = function () {
         statefulApi.compositeMutationBroadcast = writePhaseCompositeMutationBroadcast;
         statefulApi.rebindingBroadcast = null; // does not occur
         statefulApi.reevaluationBroadcast = nullFn;
-
-        autonomousListeners = [];
-        downstream = {};
+		
+		independentNodeInitialValues = {};
+		writePhasePublications = {};
     }
 
     function writePhaseIndependentNodeAccessor(args) {
-        var delegateArgs = ko.utils.extend({}, args);
-        delegateArgs.afterWrite = interceptPublication;
+        var delegateArgs = ko.utils.extend({}, args),
+			initialValue = args.accessor(),
+			observableUid  = ko.uid.of(args.observable);
+        delegateArgs.afterWrite = function (args) {
+			if(!Object.prototype.hasOwnProperty.call(independentNodeInitialValues, observableUid))
+				independentNodeInitialValues[observableUid] = initialValue;
+			writePhasePublications[observableUid] = args;
+		};
         return ko.abstractObservableManager.independentNodeAccessor.call(this, delegateArgs);
     }
 
@@ -111,24 +117,9 @@ ko.newAtomicObservableManager = function () {
     }
 
     function setUpPublishPhase() {
-        evaluated = {};
-        publishPhaseRebindings = [];
-        publishPhaseCompositeMutationBroadcasts = [];
-        cache = null;
-        writePhaseCompositeMutationBroadcasts = null;
-        statefulApi.independentNodeAccessor = publishPhaseIndependentNodeAccessor;
-        statefulApi.dependentNodeAccessor = publishPhaseDependentNodeAccessor;
-        statefulApi.compositeMutationBroadcast = publishPhaseCompositeMutationBroadcast;
-        statefulApi.reevaluationBroadcast = nullFn;
-        statefulApi.rebindingBroadcast = null; // does not occur
-    }
-
-    function publishPhaseIndependentNodeAccessor(args) {
-        var delegateArgs = ko.utils.extend({}, args);
-        delegateArgs.afterWrite = function (args) {
-            publishPhaseRebindings.push(args);
-        };
-        return ko.abstractObservableManager.independentNodeAccessor.call(this, delegateArgs);
+        setUpWritePhase();
+		evaluated = {};
+		statefulApi.dependentNodeAccessor = publishPhaseDependentNodeAccessor;
     }
 
     function publishPhaseDependentNodeAccessor(args) {
@@ -149,10 +140,6 @@ ko.newAtomicObservableManager = function () {
         return ko.abstractObservableManager.dependentNodeAccessor(delegateArgs);
     }
 
-    function publishPhaseCompositeMutationBroadcast(args) {
-        publishPhaseCompositeMutationBroadcasts.push(args);
-    }
-
     function interceptPublication(args) {
         try {
             var subscribable = args.observable, accessor = args.accessor;
@@ -160,14 +147,18 @@ ko.newAtomicObservableManager = function () {
                 var callback = subscription.callback,
                     callbackUid = ko.uid.of(callback);
                 if (callbackUid == null) {
+					for (var i = 0; i < autonomousListeners.length; i++) {
+						var al = autonomousListeners[i];
+						if(al.callback === callback && al.accessor === accessor)
+							return;
+					}
                     autonomousListeners.push({
                         callback: callback,
                         accessor: accessor
                     });
                 } else if (!Object.prototype.hasOwnProperty.call(downstream, callbackUid)) {
-                    downstream[callbackUid] = {
-                        evaluate: callback
-                    };
+                    downstreamEvaluationQueue.push(downstream[callbackUid] = callback);
+					
                     // Recursively collect all transitive observers.  We cheat and pass in the
                     // dependentObservable as the (direct) accessor.  By the time it would be
                     // invoked, after downstream reevaluation, its net effect is the same.  This
@@ -184,47 +175,47 @@ ko.newAtomicObservableManager = function () {
 
     function commit() {
         do {
-            // Commit the new values while intercepting publication
-            ko.utils.objectForEach(cache, function (observableUid, o) {
-                var delegateArgs = ko.utils.extend({}, o);
-                delegateArgs.afterWrite = interceptPublication;
-                return ko.abstractObservableManager.independentNodeAccessor.call(this, delegateArgs);
+			// Start commit phase
+			autonomousListeners = [];
+			downstreamEvaluationQueue = [];
+			downstream = {};
+			
+			// Intercept publications
+            ko.utils.objectForEach(writePhasePublications, function (observableUid, args) {
+				// Reset to initial value and replay the write, intercepting publication
+				var delegateArgs = ko.utils.extend({}, args);
+				delegateArgs.afterWrite = interceptPublication;
+				
+				args.accessor(independentNodeInitialValues[observableUid]);
+                ko.abstractObservableManager.independentNodeAccessor.call(this, delegateArgs);
             });
-
+			
             // Transform the intercepted broadcasts into additional intercepted publications
             ko.utils.arrayForEach(writePhaseCompositeMutationBroadcasts, function (o) {
                 interceptPublication(o);
             });
-
-            setUpPublishPhase();
-
-            // Trigger evaluation of all downstream dependent nodes
-            ko.utils.objectForEach(downstream, function (callbackUid, o) {
-                if (!Object.prototype.hasOwnProperty.call(evaluated, callbackUid)) {
-                    evaluated[callbackUid] = null;
-                    o.evaluate();
-                }
-            });
-
-            // Notify all autonomous listeners
-            ko.utils.arrayForEach(autonomousListeners, function (o) {
-                o.callback(o.accessor());
-            });
-
-            // If any additional mutation of independent nodes was intercepted during the commit
+			
+			// If any additional mutation of independent nodes was intercepted during the commit
             // we must repeat the whole process.
-            if (publishPhaseRebindings.length || publishPhaseCompositeMutationBroadcasts.length) {
-                setUpWritePhase();
+			if( downstreamEvaluationQueue.length || autonomousListeners.length ) {
+				setUpPublishPhase();
 
-                ko.utils.arrayForEach(publishPhaseRebindings, function (args) {
-                    interceptPublication(args);
-                });
-                ko.utils.arrayForEach(publishPhaseCompositeMutationBroadcasts, function (o) {
-                    ko.observableManager.compositeMutationBroadcast(o);
-                });
-            } else {
-                break;
-            }
+				// Trigger evaluation of all downstream dependent nodes
+				ko.utils.arrayForEach(downstreamEvaluationQueue, function (o) {
+					var callbackUid = ko.uid.of(o);
+					if (!Object.prototype.hasOwnProperty.call(evaluated, callbackUid)) {
+						evaluated[callbackUid] = null;
+						o();
+					}
+				});
+
+				// Notify all autonomous listeners
+				ko.utils.arrayForEach(autonomousListeners, function (o) {
+					o.callback(o.accessor());
+				});
+			} else {
+				break;
+			}
         } while(true);
     }
 

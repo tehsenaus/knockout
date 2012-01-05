@@ -1,5 +1,5 @@
 
-if(!window.hasOwnProperty('Profiler')) {
+if(!window.Profiler) {
 	window.Profiler = {
 		profiled: function (fn) { return fn; },
 		manager: {
